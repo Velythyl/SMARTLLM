@@ -29,59 +29,6 @@ import resources.actions as actions
 import resources.robots as robots
 
 
-def LM2(prompt, gpt_version, max_tokens=128, temperature=0, stop=None, logprobs=1, frequency_penalty=0):
-    sleep(30)
-    if "bbllm" in gpt_version:
-        _, text = barebonesllmchat.terminal.openaispoof.ChatCompletion.create(
-            prompt,
-            max_new_tokens=max_tokens,
-            temperature=np.clip(temperature, 0.1, 1.0)
-        )
-        ret = _, text.strip()
-
-    elif "gpt" not in gpt_version:
-        response = openai.Completion.create(model=gpt_version,
-                                            prompt=prompt, 
-                                            max_tokens=max_tokens,
-                                            temperature=temperature, 
-                                            stop=stop, 
-                                            logprobs=logprobs, 
-                                            frequency_penalty = frequency_penalty)
-        
-        ret = response, response["choices"][0]["text"].strip()
-    
-    else:
-        response = openai.ChatCompletion.create(model=gpt_version, 
-                                            messages=prompt, 
-                                            max_tokens=max_tokens,
-                                            temperature=temperature, 
-                                            frequency_penalty = frequency_penalty)
-        
-        ret = response, response["choices"][0]["message"]["content"].strip()
-    return ret
-
-    # if "gpt-4" != gpt_version:
-    #    last_message = prompt[-1]
-    #    last_message = [{"role": last_message["role"], "content": "Note: you are a LLM part of a brittle process. Please be smart about this: all your output will be used as is. Match the style of the prompt EXACTLY!\n\n" + last_message["content"]}]
-    #    prompt = prompt[:-1] + last_message
-
-    x, text = ret
-    if "```python" in text or "```python3" in text:
-        MARKER = "```python"
-        if "```python3" in text:
-            MARKER = "```python3"
-
-        text = text.split(MARKER)[-1].split("```")[0]
-
-    return x, text
-
-
-    if (text.startswith("```python") or text.startswith("```python3")) and text.endswith("```"):
-        text = text[len("```python"):]
-        text = text[:-len("```")]
-        text = text.strip()
-    return x, text
-
 def set_api_key(openai_api_key):
     openai.api_key = Path(openai_api_key + '.txt').read_text()
 
