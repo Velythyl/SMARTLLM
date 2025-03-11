@@ -1,10 +1,15 @@
-
+from SMARTLLM.smartllm.utils.get_controller import get_controller
+from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 
 total_exec = 0
 success_exec = 0
 
-c = Controller( commit_id="3213d486cd09bcbafce33561997355983bdf8d1a", height=1000, width=1000)
-c.reset("FloorPlan" + str(floor_no)) 
+#c = Controller( commit_id="3213d486cd09bcbafce33561997355983bdf8d1a", height=1000, width=1000)
+#c.reset("FloorPlan" + str(floor_no))
+print(floor_no)
+scene = resolve_scene_id(floor_no)
+c = get_controller(scene, width=1000, height=1000)
+
 no_robot = len(robots)
 
 # initialize n agents into the scene

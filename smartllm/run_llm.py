@@ -19,6 +19,8 @@ import ai2thor.controller
 import sys
 
 from SMARTLLM.smartllm.query_lm import LM
+from SMARTLLM.smartllm.utils.get_controller import get_controller
+from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 from ai2holodeck.constants import THOR_COMMIT_ID
 from hippo.ai2thor_hippo_controller import get_hippo_controller
 from hippo.utils.file_utils import get_tmp_folder
@@ -54,14 +56,6 @@ def get_ai2_thor_objects(scene):
     return obj
 
 
-def get_controller(scene):
-    if isinstance(scene, str):
-        controller = ai2thor.controller.Controller(commit_id=THOR_COMMIT_ID, scene=scene)
-    else:
-        assert isinstance(scene, dict)
-        controller = get_hippo_controller(scene, target_dir=TARGET_TMP_DIR)
-    return controller
-
 @dataclasses.dataclass
 class SceneTask:
     test_tasks: tuple
@@ -73,17 +67,15 @@ class SceneTask:
     scene: Union[str, Any]
 
 def parse_floorplan(args_floor_plan):
-    if "FloorPlan" in args_floor_plan:
-        task_path = f"./data/{args.test_set}/{args.floor_plan}.json"
-        scene = args_floor_plan
-    else:
-        temp = args_floor_plan.split(".json")[0]
-        temp = temp +"_TASK.json"
-        task_path = temp
+    scene = resolve_scene_id(args_floor_plan)
 
-        scene = None
-        with open(args_floor_plan, "r") as f:
-            scene = json.load(f)
+    if isinstance(scene, dict):
+        temp = args_floor_plan.split(".json")[0]
+        temp = temp + "_TASK.json"
+        task_path = temp
+    else:
+        assert isinstance(scene, str)
+        task_path = f"./data/{args.test_set}/{args.floor_plan}.json"
 
     # read the tasks
     test_tasks = []

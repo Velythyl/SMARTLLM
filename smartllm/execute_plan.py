@@ -28,7 +28,11 @@ def compile_aithor_exec_file(expt_name):
     # append the robot list
     executable_plan += (log_data[8] + "\n")
     # append the floor number
-    flr_no = log_data[4][12:]
+    flr_no = log_data[4][12:].strip()
+    if flr_no.startswith("'") or flr_no.startswith('"'):
+        pass
+    else:
+        flr_no = '"' + flr_no + '"'
     gt = log_data[9]
     executable_plan += ("floor_no = " + flr_no + "\n\n")
     executable_plan += (gt)

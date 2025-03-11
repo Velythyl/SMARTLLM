@@ -6,6 +6,11 @@ import time
 import threading
 import cv2
 import numpy as np
+
+from SMARTLLM.smartllm.utils.filter_positions import filter_agent_positions
+from SMARTLLM.smartllm.utils.get_obj_of_interest import get_obj_of_interest
+from SMARTLLM.smartllm.utils.get_reachable_positions import get_all_reachable_positions, get_rooms_polymap, \
+    try_find_collision_free_starting_position
 from ai2thor.controller import Controller
 from scipy.spatial import distance
 from typing import Tuple
@@ -14,6 +19,8 @@ import random
 import os
 from glob import glob
 
+from SMARTLLM.smartllm.utils.get_controller import get_controller
+from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 from ai2holodeck.constants import THOR_COMMIT_ID
 
 
@@ -50,27 +57,81 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
 
-floor_no = 1
+floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/6/scene.json"   # 1
 
-c = Controller(commit_id=THOR_COMMIT_ID, height=1000, width=1000)
-c.reset("FloorPlan" + str(floor_no)) 
-no_robot = len(robots)
+#c = Controller(commit_id=THOR_COMMIT_ID, height=1000, width=1000)
+#c.reset("FloorPlan" + str(floor_no))
+scene = resolve_scene_id(floor_no)
+c = get_controller(scene, width=1000, height=1000, snapToGrid=False, visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
+no_robot = 1 #len(robots)
+
+#teleport_success = try_find_collision_free_starting_position(house=scene, controller=c, room_poly_map=get_rooms_polymap(scene))
+#assert teleport_success
+
+event = c.step(
+                action="TeleportFull",
+                position={
+                    "x": 1,
+                    "y": scene["metadata"]["agent"]["position"]["y"],
+                    "z": 1,
+                },
+                rotation=scene["metadata"]["agent"]["rotation"],
+                standing=True,
+                horizon=30,
+                forceAction=True,
+            )
+
+
+reachable_positions_ = c.step(action="GetReachablePositions").metadata["actionReturn"]
+reachable_positions = positions_tuple = [(p["x"], p["y"], p["z"]) for p in reachable_positions_]
+
+obj_of_interest = get_obj_of_interest(scene, c)
+reachable_positions = filter_agent_positions(reachable_positions, obj_of_interest, margin=0.01)
 
 # initialize n agents into the scene
-multi_agent_event = c.step(dict(action='Initialize', agentMode="default", snapGrid=False, gridSize=0.25, rotateStepDegrees=20, visibilityDistance=100, fieldOfView=90, agentCount=no_robot))
+multi_agent_event = c.step(
+    dict(action='Initialize', agentMode="default", snapGrid=False, snapToGrid=False, gridSize=0.25, rotateStepDegrees=90, visibilityDistance=100, fieldOfView=90, agentCount=no_robot),
+raise_for_failure=True
+)
+
+event = c.step(
+                action="TeleportFull",
+                position={
+                    "x": 1,
+                    "y": scene["metadata"]["agent"]["position"]["y"],
+                    "z": 1,
+                },
+                rotation=scene["metadata"]["agent"]["rotation"],
+                standing=True,
+                horizon=30,
+                forceAction=True,
+            )
+
+
+#reachable_positions = get_all_reachable_positions(house=scene, controller=c, room_poly_map=get_rooms_polymap(scene))
+
+# initialize n agents into the scene
+#multi_agent_event = c.step(
+#    dict(action='Initialize', agentMode="default", snapGrid=False, gridSize=0.25, agentCount=no_robot, visibilityDistance=100, fieldOfView=90),#,  rotateStepDegrees=20, ),
+#raise_for_failure=True
+#)
 
 # add a top view camera
 event = c.step(action="GetMapViewCameraProperties")
 event = c.step(action="AddThirdPartyCamera", **event.metadata["actionReturn"])
 
-# get reachabel positions
-reachable_positions_ = c.step(action="GetReachablePositions").metadata["actionReturn"]
-reachable_positions = positions_tuple = [(p["x"], p["y"], p["z"]) for p in reachable_positions_]
+#print(c.step(action="GetReachablePositions").metadata["errorMessage"])
+#exit()
 
-# randomize postions of the agents
-for i in range (no_robot):
-    init_pos = random.choice(reachable_positions_)
-    c.step(dict(action="Teleport", position=init_pos, agentId=i))
+# maybe need to do this https://github.com/allenai/Holodeck/issues/18#issuecomment-1919531859
+
+# get reachabel positions
+
+
+# randomize postions of the agents  now done above
+#for i in range (no_robot):
+#    init_pos = random.choice(reachable_positions_)
+#    c.step(dict(action="Teleport", position=init_pos, agentId=i))
 
 action_queue = []
 
@@ -78,9 +139,9 @@ task_over = False
 
 def exec_actions():
     # delete if current output already exist
-    cur_path = os.path.dirname(__file__) + "/*/"
-    for x in glob(cur_path, recursive = True):
-        shutil.rmtree (x)
+    #cur_path = os.path.dirname(__file__) + "/*/"
+    #for x in glob(cur_path, recursive = True):
+    #    shutil.rmtree (x)
     
     # create new folders to save the images from the agents
     for i in range(no_robot):
@@ -154,6 +215,7 @@ def exec_actions():
             
 actions_thread = threading.Thread(target=exec_actions)
 actions_thread.start()
+i=0
 
 def GoToObject(robots, dest_obj):
     print ("Going to ", dest_obj)
@@ -379,6 +441,23 @@ def CleanObject(robot, sw_obj):
     action_queue.append({'action':'CleanObject', 'objectId':sw_obj_id, 'agent_id':agent_id}) 
  
 # LLM Generated Code
+
+def try_sacha_kitchen(robot):
+    # 0: Task 4: Wash the Potato
+    # 1: Go to the Potato.
+    GoToObject(robot, 'emergency stop button')
+    # 2: Pick up the Potato.
+    PickupObject(robot, 'emergency stop button')
+    # 3: Go to the Sink.
+    GoToObject(robot, 'storage cabinet')
+    # 4: Put the Potato in the Sink.
+    PutObject(robot, 'emergency stop button', 'storage cabinet')
+    # 5: Switch on the Faucet.
+
+sacha_kitchen_thread = threading.Thread(target=try_sacha_kitchen, args=(robots[0],))
+sacha_kitchen_thread.start()
+sacha_kitchen_thread.join()
+exit()
  
 def wash_apple(robot):
     # 0: Task 1: Wash the Apple
