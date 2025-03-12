@@ -22,6 +22,7 @@ from glob import glob
 from SMARTLLM.smartllm.utils.get_controller import get_controller
 from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 from ai2holodeck.constants import THOR_COMMIT_ID
+from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
 
 
 def closest_node(node, nodes, no_robot, clost_node_location):
@@ -57,13 +58,15 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
 
-floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/6/scene.json"   # 1
+floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/8/scene.json"   # 1
 
 #c = Controller(commit_id=THOR_COMMIT_ID, height=1000, width=1000)
 #c.reset("FloorPlan" + str(floor_no))
 scene = resolve_scene_id(floor_no)
-c = get_controller(scene, width=1000, height=1000, snapToGrid=False, visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
+c, runtime_container = get_controller(scene, get_runtime_container=True, width=1000, height=1000, snapToGrid=False, visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
 no_robot = 1 #len(robots)
+
+runtime_containers = [runtime_container]
 
 #teleport_success = try_find_collision_free_starting_position(house=scene, controller=c, room_poly_map=get_rooms_polymap(scene))
 #assert teleport_success
@@ -157,6 +160,11 @@ def exec_actions():
         os.makedirs(folder_path)
     
     img_counter = 0
+
+    def PushRuntimeContainer(act):
+        runtime_containers.append(
+            runtime_container.update_from_ai2thor(c.last_event.events[act['agent_id']].metadata["objects"])
+        )
     
     while not task_over:
         if len(action_queue) > 0:
@@ -177,24 +185,37 @@ def exec_actions():
                         
                 elif act['action'] == 'RotateLeft':
                     multi_agent_event = c.step(action="RotateLeft", degrees=act['degrees'], agentId=act['agent_id'])
+                    PushRuntimeContainer(act) # fixme assert that this is only called at the very end of GotToObj
                     
                 elif act['action'] == 'RotateRight':
                     multi_agent_event = c.step(action="RotateRight", degrees=act['degrees'], agentId=act['agent_id'])
+                    PushRuntimeContainer(act) # fixme assert that this is only called at the very end of GotToObj
                     
                 elif act['action'] == 'PickupObject':
-                    multi_agent_event = c.step(action="PickupObject", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True) 
+                    multi_agent_event = c.step(action="PickupObject", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
+                    PushRuntimeContainer(act)
 
                 elif act['action'] == 'PutObject':
                     multi_agent_event = c.step(action="PutObject", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
-    
+                    PushRuntimeContainer(act)
+
                 elif act['action'] == 'ToggleObjectOn':
                     multi_agent_event = c.step(action="ToggleObjectOn", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
-                
+                    PushRuntimeContainer(act)
+
                 elif act['action'] == 'ToggleObjectOff':
                     multi_agent_event = c.step(action="ToggleObjectOff", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
+                    PushRuntimeContainer(act)
+
+                elif act['action'] == "PushRuntimeContainer":
+                    PushRuntimeContainer(act)
                 
                 elif act['action'] == 'Done':
                     multi_agent_event = c.step(action="Done")
+
+                    cv2.destroyAllWindows()
+                    time.sleep(0.5)
+                    return
               
             except Exception as e:
                 print (e)
@@ -212,6 +233,7 @@ def exec_actions():
             
             img_counter += 1    
             action_queue.pop(0)
+
             
 actions_thread = threading.Thread(target=exec_actions)
 actions_thread.start()
@@ -313,7 +335,7 @@ def GoToObject(robots, dest_obj):
         action_queue.append({'action':'RotateRight', 'degrees':abs(rot_angle), 'agent_id':agent_id})
     else:
         action_queue.append({'action':'RotateLeft', 'degrees':abs(rot_angle), 'agent_id':agent_id})
-        
+
     print ("Reached: ", dest_obj)
     
 def PickupObject(robot, pick_obj):
@@ -438,7 +460,10 @@ def CleanObject(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
 
-    action_queue.append({'action':'CleanObject', 'objectId':sw_obj_id, 'agent_id':agent_id}) 
+    action_queue.append({'action':'CleanObject', 'objectId':sw_obj_id, 'agent_id':agent_id})
+
+def Done():
+    action_queue.append({'action': 'Done'})
  
 # LLM Generated Code
 
@@ -449,14 +474,23 @@ def try_sacha_kitchen(robot):
     # 2: Pick up the Potato.
     PickupObject(robot, 'emergency stop button')
     # 3: Go to the Sink.
-    GoToObject(robot, 'storage cabinet')
+    GoToObject(robot, 'small table')
     # 4: Put the Potato in the Sink.
-    PutObject(robot, 'emergency stop button', 'storage cabinet')
+    PutObject(robot, 'emergency stop button', 'small table')
     # 5: Switch on the Faucet.
+    SwitchOn(robot, 'emergency stop button')
+
+    Done()
 
 sacha_kitchen_thread = threading.Thread(target=try_sacha_kitchen, args=(robots[0],))
 sacha_kitchen_thread.start()
 sacha_kitchen_thread.join()
+
+while sacha_kitchen_thread.is_alive():
+    time.sleep(0.5)
+for i, container in enumerate(runtime_containers[:-1]):
+    print(container.diff(runtime_containers[i+1]))
+
 exit()
  
 def wash_apple(robot):

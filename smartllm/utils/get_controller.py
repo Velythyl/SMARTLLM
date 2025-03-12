@@ -6,14 +6,12 @@ from hippo.utils.file_utils import get_tmp_folder
 
 TARGET_TMP_DIR = get_tmp_folder()
 
-def get_controller(scene, **kwargs):
-
+def get_controller(scene, get_runtime_container=False, **kwargs):
     if "target_dir" in kwargs:
         target_dir = kwargs.pop("target_dir")
     else:
         target_dir = TARGET_TMP_DIR
-    controller = get_hippo_controller(scene, target_dir=target_dir, **kwargs)
-    return controller
+    return get_hippo_controller(scene, target_dir=target_dir, get_runtime_container=get_runtime_container, **kwargs)
 
     if isinstance(scene, str):
         controller = ai2thor.controller.Controller(commit_id=THOR_COMMIT_ID, scene=scene, **kwargs)
