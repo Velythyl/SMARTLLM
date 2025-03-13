@@ -23,6 +23,7 @@ from SMARTLLM.smartllm.utils.get_controller import get_controller
 from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
 from ai2holodeck.constants import THOR_COMMIT_ID
 from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
+from hippo.hippocontainers.skill_simulator import Simulator
 
 
 def closest_node(node, nodes, no_robot, clost_node_location):
@@ -58,7 +59,7 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
 
-floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/8/scene.json"   # 1
+floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/9/scene.json"   # 1
 
 #c = Controller(commit_id=THOR_COMMIT_ID, height=1000, width=1000)
 #c.reset("FloorPlan" + str(floor_no))
@@ -136,108 +137,11 @@ event = c.step(action="AddThirdPartyCamera", **event.metadata["actionReturn"])
 #    init_pos = random.choice(reachable_positions_)
 #    c.step(dict(action="Teleport", position=init_pos, agentId=i))
 
-action_queue = []
 
 task_over = False
 
-def exec_actions():
-    # delete if current output already exist
-    #cur_path = os.path.dirname(__file__) + "/*/"
-    #for x in glob(cur_path, recursive = True):
-    #    shutil.rmtree (x)
-    
-    # create new folders to save the images from the agents
-    for i in range(no_robot):
-        folder_name = "agent_" + str(i+1)
-        folder_path = os.path.dirname(__file__) + "/" + folder_name
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-    
-    # create folder to store the top view images
-    folder_name = "top_view"
-    folder_path = os.path.dirname(__file__) + "/" + folder_name
-    if not os.path.exists(folder_path):
-        os.makedirs(folder_path)
-    
-    img_counter = 0
-
-    def PushRuntimeContainer(act):
-        runtime_containers.append(
-            runtime_container.update_from_ai2thor(c.last_event.events[act['agent_id']].metadata["objects"])
-        )
-    
-    while not task_over:
-        if len(action_queue) > 0:
-            try:
-                act = action_queue[0]
-                if act['action'] == 'ObjectNavExpertAction':
-                    multi_agent_event = c.step(dict(action=act['action'], position=act['position'], agentId=act['agent_id']))
-                    next_action = multi_agent_event.metadata['actionReturn']
-
-                    if next_action != None:
-                        multi_agent_event = c.step(action=next_action, agentId=act['agent_id'], forceAction=True)
-                
-                elif act['action'] == 'MoveAhead':
-                    multi_agent_event = c.step(action="MoveAhead", agentId=act['agent_id'])
-                    
-                elif act['action'] == 'MoveBack':
-                    multi_agent_event = c.step(action="MoveBack", agentId=act['agent_id'])
-                        
-                elif act['action'] == 'RotateLeft':
-                    multi_agent_event = c.step(action="RotateLeft", degrees=act['degrees'], agentId=act['agent_id'])
-                    PushRuntimeContainer(act) # fixme assert that this is only called at the very end of GotToObj
-                    
-                elif act['action'] == 'RotateRight':
-                    multi_agent_event = c.step(action="RotateRight", degrees=act['degrees'], agentId=act['agent_id'])
-                    PushRuntimeContainer(act) # fixme assert that this is only called at the very end of GotToObj
-                    
-                elif act['action'] == 'PickupObject':
-                    multi_agent_event = c.step(action="PickupObject", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
-                    PushRuntimeContainer(act)
-
-                elif act['action'] == 'PutObject':
-                    multi_agent_event = c.step(action="PutObject", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
-                    PushRuntimeContainer(act)
-
-                elif act['action'] == 'ToggleObjectOn':
-                    multi_agent_event = c.step(action="ToggleObjectOn", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
-                    PushRuntimeContainer(act)
-
-                elif act['action'] == 'ToggleObjectOff':
-                    multi_agent_event = c.step(action="ToggleObjectOff", objectId=act['objectId'], agentId=act['agent_id'], forceAction=True)
-                    PushRuntimeContainer(act)
-
-                elif act['action'] == "PushRuntimeContainer":
-                    PushRuntimeContainer(act)
-                
-                elif act['action'] == 'Done':
-                    multi_agent_event = c.step(action="Done")
-
-                    #cv2.destroyAllWindows()
-                    #time.sleep(0.5)
-                    #return
-              
-            except Exception as e:
-                print (e)
-                
-            for i,e in enumerate(multi_agent_event.events):
-                cv2.imshow('agent%s' % i, e.cv2img)
-                f_name = os.path.dirname(__file__) + "/agent_" + str(i+1) + "/img_" + str(img_counter).zfill(5) + ".png"
-                cv2.imwrite(f_name, e.cv2img)
-            top_view_rgb = cv2.cvtColor(c.last_event.events[0].third_party_camera_frames[-1], cv2.COLOR_BGR2RGB)
-            cv2.imshow('Top View', top_view_rgb)
-            f_name = os.path.dirname(__file__) + "/top_view/img_" + str(img_counter).zfill(5) + ".png"
-            cv2.imwrite(f_name, e.cv2img)
-            if cv2.waitKey(25) & 0xFF == ord('q'):
-                break
-            
-            img_counter += 1    
-            action_queue.pop(0)
-
-            
-actions_thread = threading.Thread(target=exec_actions)
-actions_thread.start()
-i=0
+simulator = Simulator(controller=c, no_robots=no_robot, objects=runtime_container)
+simulator.start_action_listener()
 
 def GoToObject(robots, dest_obj):
     print ("Going to ", dest_obj)
@@ -302,7 +206,7 @@ def GoToObject(robots, dest_obj):
                 count_since_update[ia] = 0
                 
             if count_since_update[ia] < 15:
-                action_queue.append({'action':'ObjectNavExpertAction', 'position':dict(x=crp[ia][0], y=crp[ia][1], z=crp[ia][2]), 'agent_id':agent_id})
+                simulator.push_action({'action':'ObjectNavExpertAction', 'position':dict(x=crp[ia][0], y=crp[ia][1], z=crp[ia][2]), 'agent_id':agent_id})
             else:    
                 #updating goal
                 clost_node_location[ia] += 1
@@ -332,9 +236,9 @@ def GoToObject(robots, dest_obj):
     rot_angle = angle - robot_location['rotation']
     
     if rot_angle > 0:
-        action_queue.append({'action':'RotateRight', 'degrees':abs(rot_angle), 'agent_id':agent_id})
+        simulator.push_action({'action':'RotateRight', 'degrees':abs(rot_angle), 'agent_id':agent_id})
     else:
-        action_queue.append({'action':'RotateLeft', 'degrees':abs(rot_angle), 'agent_id':agent_id})
+        simulator.push_action({'action':'RotateLeft', 'degrees':abs(rot_angle), 'agent_id':agent_id})
 
     print ("Reached: ", dest_obj)
     
@@ -349,7 +253,7 @@ def PickupObject(robot, pick_obj):
             pick_obj_id = obj
             break # find the first instance
         
-    action_queue.append({'action':'PickupObject', 'objectId':pick_obj_id, 'agent_id':agent_id})
+    simulator.push_action({'action':'PickupObject', 'objectId':pick_obj_id, 'agent_id':agent_id})
     
 def PutObject(robot, put_obj, recp):
     robot_name = robot['name']
@@ -369,7 +273,7 @@ def PutObject(robot, put_obj, recp):
                 recp_obj_id = obj
                 dest_obj_center = objs_center[idx]
                 dist_to_recp = dist
-    action_queue.append({'action':'PutObject', 'objectId':recp_obj_id, 'agent_id':agent_id})
+    simulator.push_action({'action':'PutObject', 'objectId':recp_obj_id, 'agent_id':agent_id})
          
 def SwitchOn(robot, sw_obj):
     robot_name = robot['name']
@@ -382,7 +286,7 @@ def SwitchOn(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
     
-    action_queue.append({'action':'ToggleObjectOn', 'objectId':sw_obj_id, 'agent_id':agent_id})      
+    simulator.push_action({'action':'ToggleObjectOn', 'objectId':sw_obj_id, 'agent_id':agent_id})      
         
 def SwitchOff(robot, sw_obj):
     robot_name = robot['name']
@@ -395,7 +299,7 @@ def SwitchOff(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
     
-    action_queue.append({'action':'ToggleObjectOff', 'objectId':sw_obj_id, 'agent_id':agent_id})        
+    simulator.push_action({'action':'ToggleObjectOff', 'objectId':sw_obj_id, 'agent_id':agent_id})        
 
 def OpenObject(robot, sw_obj):
     robot_name = robot['name']
@@ -408,7 +312,7 @@ def OpenObject(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
     
-    action_queue.append({'action':'OpenObject', 'objectId':sw_obj_id, 'agent_id':agent_id})
+    simulator.push_action({'action':'OpenObject', 'objectId':sw_obj_id, 'agent_id':agent_id})
     
 def CloseObject(robot, sw_obj):
     robot_name = robot['name']
@@ -421,7 +325,7 @@ def CloseObject(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
     
-    action_queue.append({'action':'CloseObject', 'objectId':sw_obj_id, 'agent_id':agent_id}) 
+    simulator.push_action({'action':'CloseObject', 'objectId':sw_obj_id, 'agent_id':agent_id}) 
     
 def BreakObject(robot, sw_obj):
     robot_name = robot['name']
@@ -434,7 +338,7 @@ def BreakObject(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
     
-    action_queue.append({'action':'BreakObject', 'objectId':sw_obj_id, 'agent_id':agent_id}) 
+    simulator.push_action({'action':'BreakObject', 'objectId':sw_obj_id, 'agent_id':agent_id}) 
     
 def SliceObject(robot, sw_obj):
     robot_name = robot['name']
@@ -447,7 +351,7 @@ def SliceObject(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
     
-    action_queue.append({'action':'SliceObject', 'objectId':sw_obj_id, 'agent_id':agent_id})      
+    simulator.push_action({'action':'SliceObject', 'objectId':sw_obj_id, 'agent_id':agent_id})      
   
 def CleanObject(robot, sw_obj):
     robot_name = robot['name']
@@ -460,10 +364,10 @@ def CleanObject(robot, sw_obj):
             sw_obj_id = obj
             break # find the first instance
 
-    action_queue.append({'action':'CleanObject', 'objectId':sw_obj_id, 'agent_id':agent_id})
+    simulator.push_action({'action':'CleanObject', 'objectId':sw_obj_id, 'agent_id':agent_id})
 
 def Done():
-    action_queue.append({'action': 'Done'})
+    simulator.push_action({'action': 'Done'})
  
 # LLM Generated Code
 
@@ -616,9 +520,9 @@ task3_thread.join()
 task4_thread.join()
 
 # Task wash_apple, wash_tomato, wash_lettuce, wash_potato is done
-action_queue.append({'action':'Done'})
-action_queue.append({'action':'Done'})
-action_queue.append({'action':'Done'})
+simulator.push_action({'action':'Done'})
+simulator.push_action({'action':'Done'})
+simulator.push_action({'action':'Done'})
 
 task_over = True
 time.sleep(5)
