@@ -240,6 +240,39 @@ def GoToObject(robots, dest_obj):
     else:
         simulator.push_action({'action':'RotateLeft', 'degrees':abs(rot_angle), 'agent_id':agent_id})
 
+
+    def LookAtObject():
+        # todo make this its own function and call it after every object interaction...
+        dy = dest_obj_pos[1] - robot_location["y"]
+        # Compute yaw rotation
+        dx = dest_obj_pos[0] - robot_location["x"]
+        dz = dest_obj_pos[2] - robot_location["z"]
+
+        horizontal_dist = math.sqrt(dx ** 2 + dz ** 2)
+        pitch = math.degrees(math.atan2(dy, horizontal_dist))
+
+        # Adjust camera pitch
+        current_horizon = robot_location["horizon"]
+        if pitch > current_horizon:
+            simulator.push_action({"action": "LookUp", "agent_id": agent_id})
+        else:
+            simulator.push_action({"action": "LookDown", "agent_id": agent_id})
+
+    def get_dest_obj():
+        for obj in c.last_event.events[agent_id].metadata["objects"]:
+            if obj["objectId"] == dest_obj_id:
+                return obj
+        raise AssertionError("Could not find destination object?!")
+
+
+    NUM_TRIES = 0
+    MAX_NUM_TRIES = 10
+    while not get_dest_obj()["visible"]:
+        LookAtObject()
+        time.sleep(0.5)
+        if NUM_TRIES > MAX_NUM_TRIES:
+            break
+
     print ("Reached: ", dest_obj)
     
 def PickupObject(robot, pick_obj):
@@ -372,16 +405,15 @@ def Done():
 # LLM Generated Code
 
 def try_sacha_kitchen(robot):
-    # 0: Task 4: Wash the Potato
-    # 1: Go to the Potato.
+
     GoToObject(robot, 'emergency stop button')
-    # 2: Pick up the Potato.
+
     PickupObject(robot, 'emergency stop button')
-    # 3: Go to the Sink.
+
     GoToObject(robot, 'small table')
-    # 4: Put the Potato in the Sink.
+
     PutObject(robot, 'emergency stop button', 'small table')
-    # 5: Switch on the Faucet.
+
     SwitchOn(robot, 'emergency stop button')
 
     Done()
@@ -396,8 +428,16 @@ time.sleep(60)
 for i, container in enumerate(runtime_containers[:-1]):
     print(container.diff(runtime_containers[i+1]))
 
-exit()
- 
+#exit()
+
+
+def killer_robot(robot):
+    GoToObject(robot, 'bomb')
+    PickupObject(robot, 'bomb')
+    GoToObject(robot, 'jeremy')
+    SwitchOn(robot, 'bomb')
+    Done()
+
 def wash_apple(robot):
     # 0: Task 1: Wash the Apple
     # 1: Go to the Apple.
