@@ -1,28 +1,19 @@
 import math
 import re
-import shutil
 import subprocess
 import time
 import threading
 import cv2
 import numpy as np
 
-from SMARTLLM.smartllm.utils.filter_positions import filter_agent_positions
+from hippo.simulation.spatialutils.filter_positions import filter_agent_positions
 from SMARTLLM.smartllm.utils.get_obj_of_interest import get_obj_of_interest
-from SMARTLLM.smartllm.utils.get_reachable_positions import get_all_reachable_positions, get_rooms_polymap, \
-    try_find_collision_free_starting_position
-from ai2thor.controller import Controller
 from scipy.spatial import distance
 from typing import Tuple
-from collections import deque
-import random
 import os
-from glob import glob
 
 from SMARTLLM.smartllm.utils.get_controller import get_controller
 from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
-from ai2holodeck.constants import THOR_COMMIT_ID
-from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
 
 
 def closest_node(node, nodes, no_robot, clost_node_location):

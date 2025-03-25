@@ -1,29 +1,16 @@
 import math
 import re
-import shutil
 import subprocess
 import time
 import threading
-import cv2
 import numpy as np
 
-from SMARTLLM.smartllm.utils.filter_positions import filter_agent_positions
-from SMARTLLM.smartllm.utils.get_obj_of_interest import get_obj_of_interest
-from SMARTLLM.smartllm.utils.get_reachable_positions import get_all_reachable_positions, get_rooms_polymap, \
-    try_find_collision_free_starting_position
-from ai2thor.controller import Controller
 from scipy.spatial import distance
 from typing import Tuple
-from collections import deque
-import random
 import os
-from glob import glob
 
-from SMARTLLM.smartllm.utils.get_controller import get_controller
-from SMARTLLM.smartllm.utils.resolve_scene import resolve_scene_id
-from ai2holodeck.constants import THOR_COMMIT_ID
-from hippo.hippocontainers.runtimeobjects import RuntimeObjectContainer
-from hippo.hippocontainers.skill_simulator import Simulator
+from SMARTLLM.smartllm.utils.get_controller import get_sim
+from hippo.simulation.skill_simulator import Simulator
 
 
 def closest_node(node, nodes, no_robot, clost_node_location):
@@ -59,84 +46,10 @@ def generate_video(input_path, prefix, char_id=0, image_synthesis=['normal'], fr
 robots = [{'name': 'robot1', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}, 
           {'name': 'robot2', 'skills': ['GoToObject', 'OpenObject', 'CloseObject', 'BreakObject', 'SliceObject', 'SwitchOn', 'SwitchOff', 'PickupObject', 'PutObject', 'DropHandObject', 'ThrowObject', 'PushObject', 'PullObject']}]
 
-floor_no = "/home/charlie/Desktop/Holodeck/SMARTLLM/hipposcenes/9/scene.json"   # 1
-
-#c = Controller(commit_id=THOR_COMMIT_ID, height=1000, width=1000)
-#c.reset("FloorPlan" + str(floor_no))
-scene = resolve_scene_id(floor_no)
-c, runtime_container = get_controller(scene, get_runtime_container=True, width=1000, height=1000, snapToGrid=False, visibilityDistance=100, fieldOfView=90, gridSize=0.25, rotateStepDegrees=20)
-no_robot = 1 #len(robots)
-
-runtime_containers = [runtime_container]
-
-#teleport_success = try_find_collision_free_starting_position(house=scene, controller=c, room_poly_map=get_rooms_polymap(scene))
-#assert teleport_success
-
-event = c.step(
-                action="TeleportFull",
-                position={
-                    "x": 1,
-                    "y": scene["metadata"]["agent"]["position"]["y"],
-                    "z": 1,
-                },
-                rotation=scene["metadata"]["agent"]["rotation"],
-                standing=True,
-                horizon=30,
-                forceAction=True,
-            )
+floor_no = "/home/charlie/Desktop/Holodeck/hippo/sampled_scenes/71/in_order_0/scene.json"  # 1
 
 
-reachable_positions_ = c.step(action="GetReachablePositions").metadata["actionReturn"]
-reachable_positions = positions_tuple = [(p["x"], p["y"], p["z"]) for p in reachable_positions_]
-
-obj_of_interest = get_obj_of_interest(scene, c)
-reachable_positions = filter_agent_positions(reachable_positions, obj_of_interest, margin=0.01)
-
-# initialize n agents into the scene
-multi_agent_event = c.step(
-    dict(action='Initialize', agentMode="default", snapGrid=False, snapToGrid=False, gridSize=0.25, rotateStepDegrees=90, visibilityDistance=100, fieldOfView=90, agentCount=no_robot),
-raise_for_failure=True
-)
-
-event = c.step(
-                action="TeleportFull",
-                position={
-                    "x": 1,
-                    "y": scene["metadata"]["agent"]["position"]["y"],
-                    "z": 1,
-                },
-                rotation=scene["metadata"]["agent"]["rotation"],
-                standing=True,
-                horizon=30,
-                forceAction=True,
-            )
-
-
-#reachable_positions = get_all_reachable_positions(house=scene, controller=c, room_poly_map=get_rooms_polymap(scene))
-
-# initialize n agents into the scene
-#multi_agent_event = c.step(
-#    dict(action='Initialize', agentMode="default", snapGrid=False, gridSize=0.25, agentCount=no_robot, visibilityDistance=100, fieldOfView=90),#,  rotateStepDegrees=20, ),
-#raise_for_failure=True
-#)
-
-# add a top view camera
-event = c.step(action="GetMapViewCameraProperties")
-event = c.step(action="AddThirdPartyCamera", **event.metadata["actionReturn"])
-
-#print(c.step(action="GetReachablePositions").metadata["errorMessage"])
-#exit()
-
-# maybe need to do this https://github.com/allenai/Holodeck/issues/18#issuecomment-1919531859
-
-# get reachabel positions
-
-
-# randomize postions of the agents  now done above
-#for i in range (no_robot):
-#    init_pos = random.choice(reachable_positions_)
-#    c.step(dict(action="Teleport", position=init_pos, agentId=i))
-
+c, runtime_container, no_robot, reachable_positions = get_sim(floor_no)
 
 task_over = False
 
@@ -405,17 +318,11 @@ def Done():
 # LLM Generated Code
 
 def try_sacha_kitchen(robot):
-
     GoToObject(robot, 'emergency stop button')
-
     PickupObject(robot, 'emergency stop button')
-
     GoToObject(robot, 'small table')
-
     PutObject(robot, 'emergency stop button', 'small table')
-
-    SwitchOn(robot, 'emergency stop button')
-
+    #SwitchOn(robot, 'emergency stop button')
     Done()
 
 sacha_kitchen_thread = threading.Thread(target=try_sacha_kitchen, args=(robots[0],))
@@ -424,9 +331,7 @@ sacha_kitchen_thread.join()
 
 # while sacha_kitchen_thread.is_alive():
 time.sleep(60)
-
-for i, container in enumerate(runtime_containers[:-1]):
-    print(container.diff(runtime_containers[i+1]))
+exit()
 
 #exit()
 
